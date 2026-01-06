@@ -5,6 +5,7 @@ import { db } from "@/lib/database";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+  createServiceClient: vi.fn(),
 }));
 vi.mock("@/lib/database", () => ({
   db: {

@@ -11,6 +11,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({})),
+  createServiceClient: vi.fn(() => ({})),
 }));
 vi.mock("@/lib/database", () => ({
   db: {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/ai/suggest-project/route";
 import { getUser, ensureUserExists } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { db } from "@/lib/database";
 import { getOpenAI } from "@/lib/openai";
 import { NextRequest } from "next/server";
@@ -12,6 +12,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+  createServiceClient: vi.fn(),
 }));
 vi.mock("@/lib/database", () => ({
   db: {
@@ -73,20 +74,18 @@ describe("API /api/ai/suggest-project", () => {
   };
 
   const createMockSupabase = (memos: any[]) => ({
-    schema: vi.fn(() => ({
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnValue({ data: memos, error: null }),
-      })),
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnValue({ data: memos, error: null }),
     })),
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getOpenAI).mockReturnValue(mockOpenAI as any);
-    vi.mocked(createClient).mockResolvedValue(createMockSupabase(mockMemos) as any);
+    vi.mocked(createServiceClient).mockReturnValue(createMockSupabase(mockMemos) as any);
   });
 
   const createRequest = (): NextRequest => {
@@ -107,7 +106,7 @@ describe("API /api/ai/suggest-project", () => {
   it("should return 400 when user has less than 3 memos", async () => {
     vi.mocked(getUser).mockResolvedValue(mockUser as any);
     vi.mocked(ensureUserExists).mockResolvedValue(mockUser as any);
-    vi.mocked(createClient).mockResolvedValue(createMockSupabase(mockMemos.slice(0, 2)) as any);
+    vi.mocked(createServiceClient).mockReturnValue(createMockSupabase(mockMemos.slice(0, 2)) as any);
 
     const request = createRequest();
     const response = await POST(request);

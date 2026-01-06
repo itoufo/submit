@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/ai/generate/route";
 import { getUser, ensureUserExists } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { db } from "@/lib/database";
 import { getOpenAI } from "@/lib/openai";
 import { NextRequest } from "next/server";
@@ -11,17 +11,8 @@ vi.mock("@/lib/auth", () => ({
   ensureUserExists: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => ({
-    schema: vi.fn(() => ({
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      })),
-    })),
-  })),
+  createClient: vi.fn(),
+  createServiceClient: vi.fn(),
 }));
 vi.mock("@/lib/database", () => ({
   db: {
@@ -87,24 +78,22 @@ describe("API /api/ai/generate", () => {
     },
   };
 
+  const createMockSupabase = (memos: any[]) => ({
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnValue({
+        data: memos,
+        error: null,
+      }),
+    })),
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getOpenAI).mockReturnValue(mockOpenAI as any);
-
-    // Mock Supabase to return memos
-    vi.mocked(createClient).mockResolvedValue({
-      schema: vi.fn(() => ({
-        from: vi.fn(() => ({
-          select: vi.fn().mockReturnThis(),
-          insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-          in: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnValue({
-            data: mockMemos,
-            error: null,
-          }),
-        })),
-      })),
-    } as any);
+    vi.mocked(createServiceClient).mockReturnValue(createMockSupabase(mockMemos) as any);
   });
 
   const createRequest = (body: object): NextRequest => {
@@ -151,16 +140,7 @@ describe("API /api/ai/generate", () => {
   it("should return 400 when no valid memos found", async () => {
     vi.mocked(getUser).mockResolvedValue(mockUser as any);
     vi.mocked(ensureUserExists).mockResolvedValue(mockUser as any);
-
-    vi.mocked(createClient).mockResolvedValue({
-      schema: vi.fn(() => ({
-        from: vi.fn(() => ({
-          select: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnValue({ data: [], error: null }),
-        })),
-      })),
-    } as any);
+    vi.mocked(createServiceClient).mockReturnValue(createMockSupabase([]) as any);
 
     const request = createRequest({ memoIds: ["non-existent"] });
     const response = await POST(request);
