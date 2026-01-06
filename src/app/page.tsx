@@ -22,7 +22,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
             <Sparkles className="h-6 w-6 text-primary" />
-            Project Insight
+            submit
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/login">
@@ -374,10 +374,10 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-4xl flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 font-bold">
             <Sparkles className="h-5 w-5 text-primary" />
-            Project Insight
+            submit
           </div>
           <p className="text-sm text-muted-foreground">
-            © 2026 Project Insight. All rights reserved.
+            © 2026 submit. All rights reserved.
           </p>
         </div>
       </footer>

@@ -42,7 +42,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Project Insight</CardTitle>
+          <CardTitle className="text-2xl font-bold">submit</CardTitle>
           <CardDescription>思考を資産に変える</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>

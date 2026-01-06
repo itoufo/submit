@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/ai-editor", label: "AIコーチ", icon: Sparkles },
   { href: "/projects", label: "プロジェクト", icon: FolderKanban },
   { href: "/partner", label: "パートナー", icon: Users },
+  { href: "/manual", label: "使い方", icon: BookOpen },
   { href: "/settings", label: "設定", icon: Settings },
 ];
 
@@ -71,7 +73,7 @@ export function Sidebar() {
           <div className="p-6 border-b">
             <Link href="/dashboard" className="flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-primary" />
-              <span className="font-bold text-lg">Project Insight</span>
+              <span className="font-bold text-lg">submit</span>
             </Link>
           </div>
 
