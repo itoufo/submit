@@ -1,0 +1,18 @@
+-- Project テーブルの欠けているカラムをすべて追加
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS frequency TEXT NOT NULL DEFAULT 'daily';
+
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS "judgmentDay" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS "penaltyAmount" INTEGER NOT NULL DEFAULT 1000;
+
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now();
+
+ALTER TABLE submit."Project"
+ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now();

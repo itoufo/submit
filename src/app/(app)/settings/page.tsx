@@ -5,15 +5,30 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { User, Bell, Palette, Shield, Save, Check } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { User, Bell, MessageCircle, Save, Check, Link, Unlink } from "lucide-react";
+
+type UserProfile = {
+  id: string;
+  name: string | null;
+  email: string;
+  lineUserId: string | null;
+  notifyMorning: boolean;
+  notifyEvening: boolean;
+  notifyUrgent: boolean;
+};
 
 export default function SettingsPage() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [notifyMorning, setNotifyMorning] = useState(true);
+  const [notifyEvening, setNotifyEvening] = useState(true);
+  const [notifyUrgent, setNotifyUrgent] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -26,6 +41,17 @@ export default function SettingsPage() {
       if (user) {
         setEmail(user.email || "");
         setName(user.user_metadata?.name || "");
+
+        // プロファイル情報を取得
+        const res = await fetch("/api/user/profile");
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data);
+          setName(data.name || user.user_metadata?.name || "");
+          setNotifyMorning(data.notifyMorning ?? true);
+          setNotifyEvening(data.notifyEvening ?? true);
+          setNotifyUrgent(data.notifyUrgent ?? true);
+        }
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -43,11 +69,15 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
-      // Prismaのユーザーも更新
       await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          notifyMorning,
+          notifyEvening,
+          notifyUrgent,
+        }),
       });
 
       setSaved(true);
@@ -59,6 +89,35 @@ export default function SettingsPage() {
     }
   };
 
+  const handleLineConnect = async () => {
+    setConnecting(true);
+    try {
+      const res = await fetch("/api/line/connect");
+      const data = await res.json();
+      if (data.connectUrl) {
+        window.location.href = data.connectUrl;
+      }
+    } catch (error) {
+      console.error("LINE connect error:", error);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleLineDisconnect = async () => {
+    if (!confirm("LINE連携を解除しますか？リマインド通知が届かなくなります。")) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/line/connect", { method: "DELETE" });
+      if (res.ok) {
+        setProfile(profile ? { ...profile, lineUserId: null } : null);
+      }
+    } catch (error) {
+      console.error("LINE disconnect error:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -67,12 +126,14 @@ export default function SettingsPage() {
     );
   }
 
+  const isLineConnected = !!profile?.lineUserId;
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold">設定</h1>
         <p className="text-muted-foreground mt-1">
-          アカウントと通知の設定を管理
+          アカウントと通知の設定
         </p>
       </div>
 
@@ -83,9 +144,6 @@ export default function SettingsPage() {
             <User className="h-5 w-5" />
             プロフィール
           </CardTitle>
-          <CardDescription>
-            基本情報を設定します
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -99,25 +157,46 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">メールアドレス</label>
             <Input value={email} disabled />
-            <p className="text-xs text-muted-foreground">
-              メールアドレスの変更はサポートにお問い合わせください
-            </p>
           </div>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
-              "保存中..."
-            ) : saved ? (
-              <>
-                <Check className="h-4 w-4 mr-2" />
-                保存しました
-              </>
+        </CardContent>
+      </Card>
+
+      {/* LINE連携 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5" />
+            LINE連携
+          </CardTitle>
+          <CardDescription>
+            LINEと連携してリマインド通知を受け取る
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="font-medium">連携状態</p>
+              <p className="text-sm text-muted-foreground">
+                {isLineConnected ? "LINEと連携済み" : "未連携"}
+              </p>
+            </div>
+            {isLineConnected ? (
+              <Button variant="outline" onClick={handleLineDisconnect}>
+                <Unlink className="h-4 w-4 mr-2" />
+                連携解除
+              </Button>
             ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                保存
-              </>
+              <Button onClick={handleLineConnect} disabled={connecting}>
+                <Link className="h-4 w-4 mr-2" />
+                {connecting ? "接続中..." : "LINEと連携"}
+              </Button>
             )}
-          </Button>
+          </div>
+          {!isLineConnected && (
+            <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+              LINE連携すると、提出期限のリマインドや判定結果の通知を受け取れます。
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -129,84 +208,70 @@ export default function SettingsPage() {
             通知設定
           </CardTitle>
           <CardDescription>
-            パートナーへの通知設定を管理します
+            LINEリマインド通知の設定（連携が必要です）
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">新しいコンテンツ追加時</p>
+              <p className="font-medium">朝のリマインド</p>
               <p className="text-sm text-muted-foreground">
-                プロジェクトに新しいコンテンツを追加した時に通知
+                毎朝9時に当日期限のプロジェクトを通知
               </p>
             </div>
-            <Badge variant="outline">Coming Soon</Badge>
+            <Switch
+              checked={notifyMorning}
+              onCheckedChange={setNotifyMorning}
+              disabled={!isLineConnected}
+            />
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">マイルストーン達成時</p>
+              <p className="font-medium">夜のリマインド</p>
               <p className="text-sm text-muted-foreground">
-                プロジェクトが10件に達した時などに通知
+                毎晩21時に未提出のプロジェクトを通知
               </p>
             </div>
-            <Badge variant="outline">Coming Soon</Badge>
+            <Switch
+              checked={notifyEvening}
+              onCheckedChange={setNotifyEvening}
+              disabled={!isLineConnected}
+            />
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium">週次サマリー</p>
+              <p className="font-medium">期限超過通知</p>
               <p className="text-sm text-muted-foreground">
-                週に一度、進捗サマリーを送信
+                未提出でペナルティ発生時に通知
               </p>
             </div>
-            <Badge variant="outline">Coming Soon</Badge>
+            <Switch
+              checked={notifyUrgent}
+              onCheckedChange={setNotifyUrgent}
+              disabled={!isLineConnected}
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* テーマ設定 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            表示設定
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="font-medium">ダークモード</p>
-              <p className="text-sm text-muted-foreground">
-                システム設定に従います
-              </p>
-            </div>
-            <Badge variant="secondary">自動</Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* プラン */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            プラン
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">現在のプラン</p>
-              <p className="text-sm text-muted-foreground">
-                AI生成回数やプロジェクト数の上限
-              </p>
-            </div>
-            <Badge>Free</Badge>
-          </div>
-          <Button variant="outline" className="mt-4" disabled>
-            プランをアップグレード（Coming Soon）
-          </Button>
-        </CardContent>
-      </Card>
+      {/* 保存ボタン */}
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving} size="lg">
+          {saving ? (
+            "保存中..."
+          ) : saved ? (
+            <>
+              <Check className="h-4 w-4 mr-2" />
+              保存しました
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              設定を保存
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

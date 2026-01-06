@@ -6,26 +6,20 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  FileText,
-  Sparkles,
+  Send,
   FolderKanban,
-  Users,
   Settings,
   LogOut,
   Menu,
   X,
-  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-  { href: "/memos", label: "観測ログ", icon: FileText },
-  { href: "/ai-editor", label: "AIコーチ", icon: Sparkles },
+  { href: "/submit", label: "提出", icon: Send },
   { href: "/projects", label: "プロジェクト", icon: FolderKanban },
-  { href: "/partner", label: "パートナー", icon: Users },
-  { href: "/manual", label: "使い方", icon: BookOpen },
   { href: "/settings", label: "設定", icon: Settings },
 ];
 
@@ -72,8 +66,8 @@ export function Sidebar() {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              <span className="font-bold text-lg">submit</span>
+              <Send className="h-6 w-6 text-primary" />
+              <span className="font-bold text-lg">SUBMIT</span>
             </Link>
           </div>
 

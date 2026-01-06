@@ -14,90 +14,70 @@ export type User = {
   email: string;
   name: string | null;
   image: string | null;
-  role: string;
+  lineUserId: string | null;
+  pledgedAt: string | null;
+  notifyMorning: boolean;
+  notifyEvening: boolean;
+  notifyUrgent: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
-export type Memo = {
+export type Pledge = {
   id: string;
   userId: string;
-  content: string;
-  type: string;
-  tags: string | null;
+  agreedToTerms: boolean;
+  agreedToPenalty: boolean;
+  agreedToLine: boolean;
+  pledgeText: string;
   createdAt: string;
-  updatedAt: string;
-};
-
-export type AiCandidate = {
-  id: string;
-  userId: string;
-  content: string;
-  format: string;
-  persona: string | null;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ProjectSuggestion = {
-  id: string;
-  userId: string;
-  title: string;
-  description: string;
-  reasoning: string;
-  memoIds: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type Project = {
   id: string;
   userId: string;
-  suggestionId: string | null;
-  title: string;
+  name: string;
   description: string | null;
-  rule: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Article = {
-  id: string;
-  projectId: string;
-  candidateId: string | null;
-  content: string;
-  publishedAt: string | null;
-  platform: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Supporter = {
-  id: string;
-  userId: string;
-  supporterUserId: string;
+  frequency: string;
+  judgmentDay: number;
+  customDays: number | null;
+  penaltyAmount: number;
   status: string;
-  inviteToken: string | null;
+  nextJudgmentDate: string | null;
+  submissionCount: number;
+  missedCount: number;
+  totalPenaltyAmount: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type Notification = {
+export type Submission = {
   id: string;
   userId: string;
-  type: string;
+  projectId: string;
+  sequenceNum: number;
   content: string;
-  read: boolean;
   createdAt: string;
 };
 
-export type Cheer = {
+export type JudgmentLog = {
   id: string;
   userId: string;
-  supporterUserId: string;
-  message: string;
+  projectId: string;
+  judgmentDate: string;
+  submitted: boolean;
+  penaltyExecuted: boolean;
+  penaltyAmount: number | null;
+  createdAt: string;
+};
+
+export type PenaltyLog = {
+  id: string;
+  userId: string;
+  amount: number;
+  stripePaymentId: string | null;
+  status: string;
+  reason: string | null;
   createdAt: string;
 };
 
@@ -123,7 +103,11 @@ export const db = {
           email: data.email,
           name: data.name || null,
           image: data.image || null,
-          role: data.role || "user",
+          lineUserId: data.lineUserId || null,
+          pledgedAt: data.pledgedAt || null,
+          notifyMorning: data.notifyMorning ?? true,
+          notifyEvening: data.notifyEvening ?? true,
+          notifyUrgent: data.notifyUrgent ?? true,
           createdAt: now,
           updatedAt: now,
         })
@@ -142,204 +126,63 @@ export const db = {
       if (error) throw error;
       return user as User;
     },
+    async setPledged(supabase: AnySupabaseClient, id: string) {
+      return this.update(supabase, id, { pledgedAt: new Date().toISOString() });
+    },
+    async findWithLineConnected(supabase: AnySupabaseClient) {
+      const { data, error } = await supabase
+        .from("User")
+        .select("*")
+        .not("lineUserId", "is", null);
+      if (error) throw error;
+      return data as User[];
+    },
+    async setLineUserId(supabase: AnySupabaseClient, id: string, lineUserId: string) {
+      return this.update(supabase, id, { lineUserId });
+    },
   },
 
-  // Memo operations
-  memo: {
-    async findMany(supabase: AnySupabaseClient, userId: string) {
+  // Pledge operations
+  pledge: {
+    async findByUser(supabase: AnySupabaseClient, userId: string) {
       const { data, error } = await supabase
-        .from("Memo")
+        .from("Pledge")
         .select("*")
         .eq("userId", userId)
-        .order("createdAt", { ascending: false });
-      if (error) throw error;
-      return data as Memo[];
-    },
-    async findUnique(supabase: AnySupabaseClient, id: string) {
-      const { data, error } = await supabase
-        .from("Memo")
-        .select("*")
-        .eq("id", id)
         .single();
       if (error && error.code !== "PGRST116") throw error;
-      return data as Memo | null;
+      return data as Pledge | null;
     },
-    async create(supabase: AnySupabaseClient, data: { userId: string; content: string; type?: string; tags?: string | null }) {
+    async create(supabase: AnySupabaseClient, data: { userId: string; pledgeText: string }) {
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
-      const { data: memo, error } = await supabase
-        .from("Memo")
+      const { data: pledge, error } = await supabase
+        .from("Pledge")
         .insert({
           id,
           userId: data.userId,
-          content: data.content,
-          type: data.type || "text",
-          tags: data.tags || null,
+          agreedToTerms: true,
+          agreedToPenalty: true,
+          agreedToLine: true,
+          pledgeText: data.pledgeText,
           createdAt: now,
-          updatedAt: now,
         })
         .select()
         .single();
       if (error) throw error;
-      return memo as Memo;
-    },
-    async update(supabase: AnySupabaseClient, id: string, data: Partial<Memo>) {
-      const { data: memo, error } = await supabase
-        .from("Memo")
-        .update({ ...data, updatedAt: new Date().toISOString() })
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return memo as Memo;
-    },
-    async delete(supabase: AnySupabaseClient, id: string) {
-      const { error } = await supabase
-        .from("Memo")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    async count(supabase: AnySupabaseClient, userId: string) {
-      const { count, error } = await supabase
-        .from("Memo")
-        .select("*", { count: "exact", head: true })
-        .eq("userId", userId);
-      if (error) throw error;
-      return count || 0;
-    },
-  },
-
-  // AiCandidate operations
-  aiCandidate: {
-    async findMany(supabase: AnySupabaseClient, userId: string, status?: string) {
-      let query = supabase
-        .from("AiCandidate")
-        .select("*")
-        .eq("userId", userId);
-      if (status) query = query.eq("status", status);
-      const { data, error } = await query.order("createdAt", { ascending: false });
-      if (error) throw error;
-      return data as AiCandidate[];
-    },
-    async findUnique(supabase: AnySupabaseClient, id: string) {
-      const { data, error } = await supabase
-        .from("AiCandidate")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
-      return data as AiCandidate | null;
-    },
-    async create(supabase: AnySupabaseClient, data: { userId: string; content: string; format?: string; persona?: string | null }) {
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      const { data: candidate, error } = await supabase
-        .from("AiCandidate")
-        .insert({
-          id,
-          userId: data.userId,
-          content: data.content,
-          format: data.format || "tweet",
-          persona: data.persona || null,
-          status: "pending",
-          createdAt: now,
-          updatedAt: now,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return candidate as AiCandidate;
-    },
-    async update(supabase: AnySupabaseClient, id: string, data: Partial<AiCandidate>) {
-      const { data: candidate, error } = await supabase
-        .from("AiCandidate")
-        .update({ ...data, updatedAt: new Date().toISOString() })
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return candidate as AiCandidate;
-    },
-    async delete(supabase: AnySupabaseClient, id: string) {
-      const { error } = await supabase
-        .from("AiCandidate")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    async count(supabase: AnySupabaseClient, userId: string) {
-      const { count, error } = await supabase
-        .from("AiCandidate")
-        .select("*", { count: "exact", head: true })
-        .eq("userId", userId);
-      if (error) throw error;
-      return count || 0;
-    },
-  },
-
-  // ProjectSuggestion operations
-  projectSuggestion: {
-    async findMany(supabase: AnySupabaseClient, userId: string, status?: string) {
-      let query = supabase
-        .from("ProjectSuggestion")
-        .select("*")
-        .eq("userId", userId);
-      if (status) query = query.eq("status", status);
-      const { data, error } = await query.order("createdAt", { ascending: false });
-      if (error) throw error;
-      return data as ProjectSuggestion[];
-    },
-    async findUnique(supabase: AnySupabaseClient, id: string) {
-      const { data, error } = await supabase
-        .from("ProjectSuggestion")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
-      return data as ProjectSuggestion | null;
-    },
-    async create(supabase: AnySupabaseClient, data: { userId: string; title: string; description: string; reasoning: string; memoIds: string }) {
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      const { data: suggestion, error } = await supabase
-        .from("ProjectSuggestion")
-        .insert({
-          id,
-          userId: data.userId,
-          title: data.title,
-          description: data.description,
-          reasoning: data.reasoning,
-          memoIds: data.memoIds,
-          status: "pending",
-          createdAt: now,
-          updatedAt: now,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return suggestion as ProjectSuggestion;
-    },
-    async update(supabase: AnySupabaseClient, id: string, data: Partial<ProjectSuggestion>) {
-      const { data: suggestion, error } = await supabase
-        .from("ProjectSuggestion")
-        .update({ ...data, updatedAt: new Date().toISOString() })
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return suggestion as ProjectSuggestion;
+      return pledge as Pledge;
     },
   },
 
   // Project operations
   project: {
-    async findMany(supabase: AnySupabaseClient, userId: string) {
-      const { data, error } = await supabase
+    async findMany(supabase: AnySupabaseClient, userId: string, status?: string) {
+      let query = supabase
         .from("Project")
         .select("*")
-        .eq("userId", userId)
-        .order("createdAt", { ascending: false });
+        .eq("userId", userId);
+      if (status) query = query.eq("status", status);
+      const { data, error } = await query.order("createdAt", { ascending: false });
       if (error) throw error;
       return data as Project[];
     },
@@ -352,18 +195,47 @@ export const db = {
       if (error && error.code !== "PGRST116") throw error;
       return data as Project | null;
     },
-    async create(supabase: AnySupabaseClient, data: { userId: string; title: string; description?: string | null; rule?: string | null; suggestionId?: string | null }) {
+    async findActiveForJudgment(supabase: AnySupabaseClient, beforeDate: string) {
+      const { data, error } = await supabase
+        .from("Project")
+        .select("*")
+        .eq("status", "active")
+        .lte("nextJudgmentDate", beforeDate);
+      if (error) throw error;
+      return data as Project[];
+    },
+    async create(supabase: AnySupabaseClient, data: {
+      userId: string;
+      name: string;
+      description?: string | null;
+      frequency?: string;
+      judgmentDay?: number;
+      customDays?: number | null;
+      penaltyAmount?: number;
+    }) {
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
+      const nextJudgmentDate = calculateNextJudgmentDate(
+        data.frequency || "weekly",
+        data.judgmentDay || 0,
+        data.customDays
+      );
       const { data: project, error } = await supabase
         .from("Project")
         .insert({
           id,
           userId: data.userId,
-          title: data.title,
+          name: data.name,
           description: data.description || null,
-          rule: data.rule || null,
-          suggestionId: data.suggestionId || null,
+          frequency: data.frequency || "weekly",
+          judgmentDay: data.judgmentDay ?? 0,
+          customDays: data.customDays || null,
+          penaltyAmount: data.penaltyAmount ?? 1000,
+          status: "active",
+          nextJudgmentDate: nextJudgmentDate.toISOString(),
+          submissionCount: 0,
+          missedCount: 0,
+          totalPenaltyAmount: 0,
           createdAt: now,
           updatedAt: now,
         })
@@ -397,124 +269,277 @@ export const db = {
       if (error) throw error;
       return count || 0;
     },
+    async incrementSubmissionCount(supabase: AnySupabaseClient, id: string) {
+      const project = await this.findUnique(supabase, id);
+      if (!project) throw new Error("Project not found");
+      return this.update(supabase, id, {
+        submissionCount: project.submissionCount + 1,
+      });
+    },
+    async incrementMissedCount(supabase: AnySupabaseClient, id: string, penaltyAmount: number) {
+      const project = await this.findUnique(supabase, id);
+      if (!project) throw new Error("Project not found");
+      return this.update(supabase, id, {
+        missedCount: project.missedCount + 1,
+        totalPenaltyAmount: project.totalPenaltyAmount + penaltyAmount,
+      });
+    },
+    async updateNextJudgmentDate(supabase: AnySupabaseClient, id: string) {
+      const project = await this.findUnique(supabase, id);
+      if (!project) throw new Error("Project not found");
+      const nextDate = calculateNextJudgmentDate(
+        project.frequency,
+        project.judgmentDay,
+        project.customDays
+      );
+      return this.update(supabase, id, {
+        nextJudgmentDate: nextDate.toISOString(),
+      });
+    },
   },
 
-  // Supporter operations
-  supporter: {
-    async findMany(supabase: AnySupabaseClient, userId: string) {
+  // Submission operations
+  submission: {
+    async findMany(supabase: AnySupabaseClient, projectId: string) {
       const { data, error } = await supabase
-        .from("Supporter")
+        .from("Submission")
         .select("*")
-        .eq("userId", userId);
+        .eq("projectId", projectId)
+        .order("sequenceNum", { ascending: false });
       if (error) throw error;
-      return data as Supporter[];
+      return data as Submission[];
     },
-    async findByToken(supabase: AnySupabaseClient, token: string) {
-      const { data, error } = await supabase
-        .from("Supporter")
+    async findByUser(supabase: AnySupabaseClient, userId: string, limit?: number) {
+      let query = supabase
+        .from("Submission")
         .select("*")
-        .eq("inviteToken", token)
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
-      return data as Supporter | null;
+        .eq("userId", userId)
+        .order("createdAt", { ascending: false });
+      if (limit) query = query.limit(limit);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as Submission[];
     },
-    async create(supabase: AnySupabaseClient, data: { userId: string; supporterUserId: string; inviteToken?: string | null }) {
+    async findInPeriod(supabase: AnySupabaseClient, projectId: string, startDate: string, endDate: string) {
+      const { data, error } = await supabase
+        .from("Submission")
+        .select("*")
+        .eq("projectId", projectId)
+        .gte("createdAt", startDate)
+        .lt("createdAt", endDate);
+      if (error) throw error;
+      return data as Submission[];
+    },
+    async create(supabase: AnySupabaseClient, data: { userId: string; projectId: string; content: string }) {
+      // Get next sequence number
+      const { data: lastSubmission } = await supabase
+        .from("Submission")
+        .select("sequenceNum")
+        .eq("projectId", data.projectId)
+        .order("sequenceNum", { ascending: false })
+        .limit(1)
+        .single();
+
+      const sequenceNum = (lastSubmission?.sequenceNum || 0) + 1;
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
-      const { data: supporter, error } = await supabase
-        .from("Supporter")
+
+      const { data: submission, error } = await supabase
+        .from("Submission")
         .insert({
           id,
           userId: data.userId,
-          supporterUserId: data.supporterUserId,
-          status: "pending",
-          inviteToken: data.inviteToken || null,
+          projectId: data.projectId,
+          sequenceNum,
+          content: data.content,
           createdAt: now,
-          updatedAt: now,
         })
         .select()
         .single();
       if (error) throw error;
-      return supporter as Supporter;
+
+      // Increment project submission count
+      await db.project.incrementSubmissionCount(supabase, data.projectId);
+
+      return submission as Submission;
     },
-    async update(supabase: AnySupabaseClient, id: string, data: Partial<Supporter>) {
-      const { data: supporter, error } = await supabase
-        .from("Supporter")
-        .update({ ...data, updatedAt: new Date().toISOString() })
-        .eq("id", id)
-        .select()
-        .single();
+    async count(supabase: AnySupabaseClient, userId: string) {
+      const { count, error } = await supabase
+        .from("Submission")
+        .select("*", { count: "exact", head: true })
+        .eq("userId", userId);
       if (error) throw error;
-      return supporter as Supporter;
+      return count || 0;
+    },
+    async countByProject(supabase: AnySupabaseClient, projectId: string) {
+      const { count, error } = await supabase
+        .from("Submission")
+        .select("*", { count: "exact", head: true })
+        .eq("projectId", projectId);
+      if (error) throw error;
+      return count || 0;
     },
   },
 
-  // Cheer operations
-  cheer: {
+  // JudgmentLog operations
+  judgmentLog: {
+    async findMany(supabase: AnySupabaseClient, userId: string, limit?: number) {
+      let query = supabase
+        .from("JudgmentLog")
+        .select("*")
+        .eq("userId", userId)
+        .order("judgmentDate", { ascending: false });
+      if (limit) query = query.limit(limit);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as JudgmentLog[];
+    },
+    async findByProject(supabase: AnySupabaseClient, projectId: string) {
+      const { data, error } = await supabase
+        .from("JudgmentLog")
+        .select("*")
+        .eq("projectId", projectId)
+        .order("judgmentDate", { ascending: false });
+      if (error) throw error;
+      return data as JudgmentLog[];
+    },
+    async create(supabase: AnySupabaseClient, data: {
+      userId: string;
+      projectId: string;
+      judgmentDate: string;
+      submitted: boolean;
+      penaltyExecuted?: boolean;
+      penaltyAmount?: number | null;
+    }) {
+      const now = new Date().toISOString();
+      const id = crypto.randomUUID();
+      const { data: log, error } = await supabase
+        .from("JudgmentLog")
+        .insert({
+          id,
+          userId: data.userId,
+          projectId: data.projectId,
+          judgmentDate: data.judgmentDate,
+          submitted: data.submitted,
+          penaltyExecuted: data.penaltyExecuted ?? false,
+          penaltyAmount: data.penaltyAmount ?? null,
+          createdAt: now,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return log as JudgmentLog;
+    },
+    async countMissed(supabase: AnySupabaseClient, userId: string) {
+      const { count, error } = await supabase
+        .from("JudgmentLog")
+        .select("*", { count: "exact", head: true })
+        .eq("userId", userId)
+        .eq("submitted", false);
+      if (error) throw error;
+      return count || 0;
+    },
+  },
+
+  // PenaltyLog operations
+  penaltyLog: {
     async findMany(supabase: AnySupabaseClient, userId: string) {
       const { data, error } = await supabase
-        .from("Cheer")
+        .from("PenaltyLog")
         .select("*")
         .eq("userId", userId)
         .order("createdAt", { ascending: false });
       if (error) throw error;
-      return data as Cheer[];
+      return data as PenaltyLog[];
     },
-    async create(supabase: AnySupabaseClient, data: { userId: string; supporterUserId: string; message: string }) {
+    async create(supabase: AnySupabaseClient, data: {
+      userId: string;
+      amount: number;
+      reason?: string | null;
+    }) {
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
-      const { data: cheer, error } = await supabase
-        .from("Cheer")
+      const { data: log, error } = await supabase
+        .from("PenaltyLog")
         .insert({
           id,
           userId: data.userId,
-          supporterUserId: data.supporterUserId,
-          message: data.message,
+          amount: data.amount,
+          stripePaymentId: null,
+          status: "pending",
+          reason: data.reason || null,
           createdAt: now,
         })
         .select()
         .single();
       if (error) throw error;
-      return cheer as Cheer;
+      return log as PenaltyLog;
     },
-  },
-
-  // Notification operations
-  notification: {
-    async findMany(supabase: AnySupabaseClient, userId: string, unreadOnly = false) {
-      let query = supabase
-        .from("Notification")
-        .select("*")
-        .eq("userId", userId);
-      if (unreadOnly) query = query.eq("read", false);
-      const { data, error } = await query.order("createdAt", { ascending: false });
-      if (error) throw error;
-      return data as Notification[];
-    },
-    async create(supabase: AnySupabaseClient, data: { userId: string; type: string; content: string }) {
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      const { data: notification, error } = await supabase
-        .from("Notification")
-        .insert({
-          id,
-          userId: data.userId,
-          type: data.type,
-          content: data.content,
-          read: false,
-          createdAt: now,
+    async updateStatus(supabase: AnySupabaseClient, id: string, status: string, stripePaymentId?: string) {
+      const { data: log, error } = await supabase
+        .from("PenaltyLog")
+        .update({
+          status,
+          stripePaymentId: stripePaymentId || null,
         })
+        .eq("id", id)
         .select()
         .single();
       if (error) throw error;
-      return notification as Notification;
+      return log as PenaltyLog;
     },
-    async markAsRead(supabase: AnySupabaseClient, id: string) {
-      const { error } = await supabase
-        .from("Notification")
-        .update({ read: true })
-        .eq("id", id);
+    async getTotalAmount(supabase: AnySupabaseClient, userId: string) {
+      const { data, error } = await supabase
+        .from("PenaltyLog")
+        .select("amount")
+        .eq("userId", userId)
+        .eq("status", "completed");
       if (error) throw error;
+      return (data || []).reduce((sum: number, log: { amount: number }) => sum + log.amount, 0);
     },
   },
 };
+
+// Helper function to calculate next judgment date
+export function calculateNextJudgmentDate(
+  frequency: string,
+  judgmentDay: number,
+  customDays?: number | null
+): Date {
+  const now = new Date();
+  const result = new Date(now);
+
+  switch (frequency) {
+    case "daily":
+      // 翌日
+      result.setDate(now.getDate() + 1);
+      break;
+    case "weekly":
+      // Find next occurrence of judgmentDay (0=Sunday, 1=Monday, etc.)
+      const daysUntilNext = (judgmentDay - now.getDay() + 7) % 7 || 7;
+      result.setDate(now.getDate() + daysUntilNext);
+      break;
+    case "biweekly":
+      const daysUntilNextBi = (judgmentDay - now.getDay() + 7) % 7 || 7;
+      result.setDate(now.getDate() + daysUntilNextBi + 7);
+      break;
+    case "monthly":
+      result.setMonth(result.getMonth() + 1);
+      result.setDate(1);
+      // Find first occurrence of judgmentDay in next month
+      while (result.getDay() !== judgmentDay) {
+        result.setDate(result.getDate() + 1);
+      }
+      break;
+    case "custom":
+      if (customDays) {
+        result.setDate(now.getDate() + customDays);
+      }
+      break;
+  }
+
+  // Set time to end of day (23:59:59)
+  result.setHours(23, 59, 59, 999);
+
+  return result;
+}

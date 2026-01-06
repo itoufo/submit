@@ -1,5 +1,5 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { db } from "./database";
+import { db, User } from "./database";
 
 export async function getUser() {
   const supabase = await createClient();
@@ -7,7 +7,14 @@ export async function getUser() {
   return user;
 }
 
-export async function getUserWithProfile() {
+export type UserWithProfile = {
+  id: string;
+  email?: string;
+  pledgedAt: string | null;
+  profile: User | null;
+};
+
+export async function getUserWithProfile(): Promise<UserWithProfile | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -26,7 +33,12 @@ export async function getUserWithProfile() {
     });
   }
 
-  return { ...user, profile };
+  return {
+    id: user.id,
+    email: user.email,
+    pledgedAt: profile?.pledgedAt || null,
+    profile,
+  };
 }
 
 export async function ensureUserExists(userId: string, email: string) {

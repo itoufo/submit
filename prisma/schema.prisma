@@ -8,175 +8,137 @@ datasource db {
   schemas  = ["submit"]
 }
 
+// ユーザー
 model User {
   id            String    @id // Supabase Auth UID
   email         String    @unique
   name          String?
   image         String?
-  role          String    @default("user") // user, supporter
+  lineUserId    String?   @unique // LINE連携用
+  pledgedAt     DateTime? // 誓約完了日時（nullなら未誓約）
+
+  // 通知設定
+  notifyMorning Boolean   @default(true)  // 朝リマインド (9:00)
+  notifyEvening Boolean   @default(true)  // 夜リマインド (21:00)
+  notifyUrgent  Boolean   @default(true)  // 期限超過通知 (0:30)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  memos              Memo[]
-  aiCandidates       AiCandidate[]
-  projects           Project[]
-  projectSuggestions ProjectSuggestion[]
-
-  // パートナー関係（自分がメインユーザー）
-  supportersAsUser    Supporter[] @relation("UserSupporters")
-  // パートナー関係（自分がサポーター）
-  supportersAsPartner Supporter[] @relation("PartnerSupporters")
-
-  // 受け取った応援
-  cheersReceived      Cheer[]     @relation("CheersReceived")
-  // 送った応援
-  cheersSent          Cheer[]     @relation("CheersSent")
-
-  // 通知
-  notifications       Notification[]
+  pledge        Pledge?
+  projects      Project[]
+  submissions   Submission[]
+  judgmentLogs  JudgmentLog[]
+  penaltyLogs   PenaltyLog[]
 
   @@schema("submit")
 }
 
-// 観測ログ（メモ）
-model Memo {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String   @db.Text
-  type      String   @default("text") // text, voice, webclip
-  tags      String?  // カンマ区切りのタグ
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// 誓約（オンボーディング時に作成、変更不可）
+model Pledge {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  agreedToTerms   Boolean  @default(true)  // 利用規約同意
+  agreedToPenalty Boolean  @default(true)  // ペナルティ同意
+  agreedToLine    Boolean  @default(true)  // LINE通知同意
+  pledgeText      String   @db.Text        // ユーザーが入力した誓約文
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("submit")
+}
+
+// プロジェクト（提出の単位）
+model Project {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  description    String?  @db.Text
+
+  // 提出頻度設定
+  frequency      String   @default("weekly") // weekly, biweekly, monthly, custom
+  judgmentDay    Int      @default(0)        // 0=日曜, 1=月曜, ..., 6=土曜
+  customDays     Int?                        // カスタム頻度の場合の日数
+
+  // ペナルティ設定
+  penaltyAmount  Int      @default(1000)     // 罰金額（円）
+
+  // 状態
+  status         String   @default("active") // active, paused, archived
+
+  // 次回判定日
+  nextJudgmentDate DateTime?
+
+  // 統計
+  submissionCount     Int @default(0)
+  missedCount         Int @default(0)
+  totalPenaltyAmount  Int @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  aiCandidates AiCandidate[] @relation("MemoToCandidates")
-
-  @@index([userId])
-  @@schema("submit")
-}
-
-// AIが生成したコンテンツ案
-model AiCandidate {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String   @db.Text
-  format    String   @default("tweet") // tweet, blog, note
-  persona   String?  // 人格・口調テンプレート
-  status    String   @default("pending") // pending, adopted, rejected
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memos    Memo[]    @relation("MemoToCandidates")
-  articles Article[]
+  submissions  Submission[]
+  judgmentLogs JudgmentLog[]
 
   @@index([userId])
   @@index([status])
+  @@index([nextJudgmentDate])
   @@schema("submit")
 }
 
-// AIコーチによるプロジェクト提案
-model ProjectSuggestion {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String   @db.Text
-  reasoning   String   @db.Text  // なぜこのプロジェクトを提案したか
-  memoIds     String   @db.Text  // 関連するメモIDのJSON配列
-  status      String   @default("pending") // pending, accepted, rejected
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project? // 承認されたら作成されるプロジェクト
-
-  @@index([userId])
-  @@index([status])
-  @@schema("submit")
-}
-
-// プロジェクト
-model Project {
+// 提出
+model Submission {
   id           String   @id @default(cuid())
   userId       String
-  suggestionId String?  @unique // AIコーチの提案から作成された場合
-  title        String
-  description  String?  @db.Text
-  rule         String?  @db.Text // JSON: 公開ルール設定
+  projectId    String
+  sequenceNum  Int               // 連番（#001, #002...）
+  content      String   @db.Text // 提出内容（テキスト必須）
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  suggestion ProjectSuggestion? @relation(fields: [suggestionId], references: [id])
-  articles   Article[]
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@schema("submit")
-}
-
-// プロジェクトに格納された記事
-model Article {
-  id          String    @id @default(cuid())
-  projectId   String
-  candidateId String?
-  content     String    @db.Text
-  publishedAt DateTime?
-  platform    String?   // x, note, blog
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  candidate AiCandidate? @relation(fields: [candidateId], references: [id])
-
   @@index([projectId])
+  @@index([createdAt])
   @@schema("submit")
 }
 
-// パートナーシップ情報
-model Supporter {
-  id              String   @id @default(cuid())
-  userId          String   // メインユーザー
-  supporterUserId String   // サポーター
-  status          String   @default("pending") // pending, active, rejected
-  inviteToken     String?  @unique
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// 判定ログ
+model JudgmentLog {
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String
+  judgmentDate DateTime
+  submitted    Boolean           // 提出済みかどうか
+  penaltyExecuted Boolean @default(false) // ペナルティ実行済みか
+  penaltyAmount   Int?           // 実行されたペナルティ額
+  createdAt    DateTime @default(now())
 
-  user      User @relation("UserSupporters", fields: [userId], references: [id], onDelete: Cascade)
-  supporter User @relation("PartnerSupporters", fields: [supporterUserId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([supporterUserId])
+  @@index([projectId])
+  @@index([judgmentDate])
   @@schema("submit")
 }
 
-// 通知ログ
-model Notification {
-  id        String   @id @default(cuid())
-  userId    String   // 通知を受け取る人（サポーター）
-  type      String   // new_content, milestone, system, project_suggestion
-  content   String   @db.Text
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+// ペナルティ実行ログ（Stripe決済記録）
+model PenaltyLog {
+  id              String   @id @default(cuid())
+  userId          String
+  amount          Int               // 金額
+  stripePaymentId String?           // Stripe Payment Intent ID
+  status          String   @default("pending") // pending, completed, failed
+  reason          String?  @db.Text // 理由（どのプロジェクトの未提出か）
+  createdAt       DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([read])
-  @@schema("submit")
-}
-
-// 応援ログ
-model Cheer {
-  id              String   @id @default(cuid())
-  userId          String   // 応援を受け取る人
-  supporterUserId String   // 応援を送る人
-  message         String
-  createdAt       DateTime @default(now())
-
-  user      User @relation("CheersReceived", fields: [userId], references: [id], onDelete: Cascade)
-  supporter User @relation("CheersSent", fields: [supporterUserId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  @@index([status])
   @@schema("submit")
 }
