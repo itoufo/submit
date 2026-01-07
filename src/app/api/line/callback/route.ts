@@ -72,6 +72,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    console.log("[LINE Callback] Step 1: Environment check");
+
     // 環境変数チェック
     if (!process.env.LINE_LOGIN_CHANNEL_ID || !process.env.LINE_LOGIN_CHANNEL_SECRET) {
       console.error("LINE Login credentials not configured");
@@ -79,6 +81,16 @@ export async function GET(request: Request) {
         `${appUrl}/settings?error=config_missing`
       );
     }
+
+    // Supabase環境変数チェック
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("SUPABASE_SERVICE_ROLE_KEY not configured");
+      return NextResponse.redirect(
+        `${appUrl}/settings?error=supabase_config_missing`
+      );
+    }
+
+    console.log("[LINE Callback] Step 2: Fetching LINE token");
 
     // LINE Access Tokenを取得
     // redirect_uri は認可時と完全一致する必要がある
@@ -112,6 +124,8 @@ export async function GET(request: Request) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
+    console.log("[LINE Callback] Step 3: Fetching LINE profile");
+
     // LINEプロフィールを取得
     const profileResponse = await fetch(LINE_PROFILE_URL, {
       headers: {
@@ -129,8 +143,12 @@ export async function GET(request: Request) {
     const profile = await profileResponse.json();
     const lineUserId = profile.userId;
 
+    console.log("[LINE Callback] Step 4: Creating Supabase client");
+
     // DBに保存
     const supabase = createServiceClient();
+
+    console.log("[LINE Callback] Step 5: Checking existing LINE user");
 
     // 既に他のユーザーに紐づいていないかチェック
     const { data: existing } = await supabase
@@ -142,13 +160,18 @@ export async function GET(request: Request) {
       .single();
 
     if (existing) {
+      console.log("[LINE Callback] LINE already connected to another user");
       return NextResponse.redirect(
         `${appUrl}/settings?error=line_already_connected`
       );
     }
 
+    console.log("[LINE Callback] Step 6: Saving LINE userId to DB");
+
     // LINE連携を保存
     await db.user.setLineUserId(supabase, userId, lineUserId);
+
+    console.log("[LINE Callback] Step 7: Success, redirecting");
 
     // Cookieをクリア
     const response = NextResponse.redirect(
@@ -159,8 +182,14 @@ export async function GET(request: Request) {
 
     return response;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "unknown";
-    console.error("LINE callback error:", err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
+    console.error("LINE callback error:", {
+      message: errorMessage,
+      stack: errorStack,
+      type: typeof err,
+      err
+    });
     return NextResponse.redirect(
       `${appUrl}/settings?error=callback_failed&detail=${encodeURIComponent(errorMessage)}`
     );
