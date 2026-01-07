@@ -182,14 +182,28 @@ export async function GET(request: Request) {
 
     return response;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorStack = err instanceof Error ? err.stack : undefined;
+    // エラーの詳細を取得
+    let errorMessage = "unknown";
+
+    if (err instanceof Error) {
+      errorMessage = err.message;
+    } else if (typeof err === "object" && err !== null) {
+      try {
+        errorMessage = JSON.stringify(err);
+      } catch {
+        errorMessage = String(err);
+      }
+    } else {
+      errorMessage = String(err);
+    }
+
     console.error("LINE callback error:", {
       message: errorMessage,
-      stack: errorStack,
+      stack: err instanceof Error ? err.stack : undefined,
       type: typeof err,
-      err
+      raw: err
     });
+
     return NextResponse.redirect(
       `${appUrl}/settings?error=callback_failed&detail=${encodeURIComponent(errorMessage)}`
     );
