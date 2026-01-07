@@ -72,9 +72,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    // 環境変数チェック
+    if (!process.env.LINE_LOGIN_CHANNEL_ID || !process.env.LINE_LOGIN_CHANNEL_SECRET) {
+      console.error("LINE Login credentials not configured");
+      return NextResponse.redirect(
+        `${appUrl}/settings?error=config_missing`
+      );
+    }
+
     // LINE Access Tokenを取得
     // redirect_uri は認可時と完全一致する必要がある
     const cleanAppUrl = appUrl.replace(/\/$/, "");
+    const redirectUri = `${cleanAppUrl}/api/line/callback`;
+
+    console.log("LINE token request:", { redirectUri, clientId: process.env.LINE_LOGIN_CHANNEL_ID });
+
     const tokenResponse = await fetch(LINE_TOKEN_URL, {
       method: "POST",
       headers: {
@@ -83,9 +95,9 @@ export async function GET(request: Request) {
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: `${cleanAppUrl}/api/line/callback`,
-        client_id: process.env.LINE_LOGIN_CHANNEL_ID!,
-        client_secret: process.env.LINE_LOGIN_CHANNEL_SECRET!,
+        redirect_uri: redirectUri,
+        client_id: process.env.LINE_LOGIN_CHANNEL_ID,
+        client_secret: process.env.LINE_LOGIN_CHANNEL_SECRET,
       }),
     });
 
@@ -93,7 +105,7 @@ export async function GET(request: Request) {
       const errorData = await tokenResponse.json();
       console.error("LINE token error:", errorData);
       return NextResponse.redirect(
-        `${appUrl}/settings?error=token_failed`
+        `${appUrl}/settings?error=token_failed&detail=${encodeURIComponent(errorData.error || 'unknown')}`
       );
     }
 
@@ -147,9 +159,10 @@ export async function GET(request: Request) {
 
     return response;
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "unknown";
     console.error("LINE callback error:", err);
     return NextResponse.redirect(
-      `${appUrl}/settings?error=callback_failed`
+      `${appUrl}/settings?error=callback_failed&detail=${encodeURIComponent(errorMessage)}`
     );
   }
 }
