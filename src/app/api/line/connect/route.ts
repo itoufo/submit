@@ -3,34 +3,86 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { db } from "@/lib/database";
 import crypto from "crypto";
+import {
+  rateLimit,
+  getClientIP,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 /**
  * LINE連携開始
  * 一時トークンを生成してLINEログインURLを返す
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Rate limiting
+  const ip = getClientIP(request);
+  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 連携用の一時トークンを生成
-  const connectToken = crypto.randomBytes(32).toString("hex");
+  // CSRF対策用のstateトークンを生成
+  const state = crypto.randomBytes(32).toString("hex");
+  const lineLoginUrl = generateLineLoginUrl(state, user.id);
 
-  // セッションに保存（実際はRedisやDBに保存するべき）
-  // ここでは簡易的にレスポンスに含める
-  const lineLoginUrl = generateLineLoginUrl(connectToken, user.id);
-
-  return NextResponse.json({
+  // stateとuserIdをcookieに保存（callbackで検証用）
+  const response = NextResponse.json({
     connectUrl: lineLoginUrl,
-    token: connectToken,
   });
+
+  // Secure cookie設定
+  const isProduction = process.env.NODE_ENV === "production";
+
+  response.cookies.set("line_connect_state", state, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 60 * 10, // 10分間有効
+    path: "/",
+  });
+
+  response.cookies.set("line_connect_user_id", user.id, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 60 * 10, // 10分間有効
+    path: "/",
+  });
+
+  return response;
 }
 
 /**
  * LINE連携完了（LINEログインコールバック後）
  */
 export async function POST(request: Request) {
+  // Rate limiting
+  const ip = getClientIP(request);
+  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -80,7 +132,21 @@ export async function POST(request: Request) {
 /**
  * LINE連携解除
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  // Rate limiting
+  const ip = getClientIP(request);
+  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -102,7 +168,9 @@ export async function DELETE() {
 
 function generateLineLoginUrl(state: string, _userId: string): string {
   const clientId = process.env.LINE_LOGIN_CHANNEL_ID;
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/line/callback`;
+  // 末尾スラッシュを除去してからパスを追加
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const redirectUri = `${appUrl}/api/line/callback`;
 
   if (!clientId) {
     return "#line-login-not-configured";

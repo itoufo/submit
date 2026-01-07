@@ -6,16 +6,36 @@ import {
   LineWebhookBody,
   LineWebhookEvent,
 } from "@/lib/line";
+import {
+  rateLimit,
+  getClientIP,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 /**
  * LINE Webhook エンドポイント
  * 友だち追加/ブロック時のイベントを処理
  */
 export async function POST(request: Request) {
+  // Rate limiting
+  const ip = getClientIP(request);
+  const rateLimitResult = rateLimit(`line-webhook:${ip}`, RATE_LIMITS.lineWebhook);
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const body = await request.text();
   const signature = request.headers.get("x-line-signature");
 
-  // 署名検証
+  // 署名検証（タイミングセーフ）
   if (!signature || !verifyLineSignature(body, signature)) {
     console.error("LINE webhook signature verification failed");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });

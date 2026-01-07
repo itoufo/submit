@@ -158,7 +158,7 @@ export function createJudgmentFailed(
 import crypto from "crypto";
 
 /**
- * LINE Webhook署名を検証
+ * LINE Webhook署名を検証（タイミングセーフ）
  */
 export function verifyLineSignature(
   body: string,
@@ -175,7 +175,16 @@ export function verifyLineSignature(
     .update(body)
     .digest("base64");
 
-  return hash === signature;
+  // タイミング攻撃対策: 固定時間で比較
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(hash, "utf8"),
+      Buffer.from(signature, "utf8")
+    );
+  } catch {
+    // 長さが異なる場合は例外が発生するが、falseを返す
+    return false;
+  }
 }
 
 /**
