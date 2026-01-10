@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/evening",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/judgment",
-      "schedule": "30 15 * * *"
     }
   ]
 }
