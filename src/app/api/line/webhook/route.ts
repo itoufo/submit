@@ -5,6 +5,7 @@ import {
   verifyLineSignature,
   LineWebhookBody,
   LineWebhookEvent,
+  replyLineMessage,
 } from "@/lib/line";
 import {
   rateLimit,
@@ -92,12 +93,116 @@ async function handleLineEvent(
       break;
 
     case "message":
-      // メッセージ受信（必要に応じて実装）
-      console.log(`LINE message from ${lineUserId}:`, event.message?.text);
+      // メッセージ受信: 提出処理
+      if (event.message?.type === "text" && event.message.text) {
+        await handleSubmissionMessage(
+          supabase,
+          lineUserId,
+          event.message.text,
+          event.replyToken
+        );
+      }
       break;
 
     default:
       console.log(`Unhandled LINE event type: ${event.type}`);
+  }
+}
+
+/**
+ * 提出メッセージを処理
+ */
+async function handleSubmissionMessage(
+  supabase: ReturnType<typeof createServiceClient>,
+  lineUserId: string,
+  messageText: string,
+  replyToken?: string
+) {
+  try {
+    // LINE連携済みユーザーを検索
+    const { data: users } = await supabase
+      .schema("submit")
+      .from("User")
+      .select("id")
+      .eq("lineUserId", lineUserId);
+
+    if (!users || users.length === 0) {
+      // 未連携ユーザー
+      if (replyToken) {
+        await replyLineMessage(
+          replyToken,
+          "アカウント連携が必要です。\nWebアプリの設定画面からLINE連携を完了してください。"
+        );
+      }
+      return;
+    }
+
+    const userId = users[0].id;
+
+    // ユーザーのアクティブなプロジェクトを取得
+    const projects = await db.project.findMany(supabase, userId, "active");
+
+    if (projects.length === 0) {
+      if (replyToken) {
+        await replyLineMessage(
+          replyToken,
+          "アクティブなプロジェクトがありません。\nWebアプリからプロジェクトを作成してください。"
+        );
+      }
+      return;
+    }
+
+    // メッセージからプロジェクトを特定
+    // 簡易マッチング: プロジェクト名が含まれているか
+    const matchedProject = projects.find((p) =>
+      messageText.includes(p.name)
+    );
+
+    let targetProject = matchedProject;
+
+    // マッチしない場合は最初のプロジェクト（1つしかない場合を想定）
+    if (!targetProject && projects.length === 1) {
+      targetProject = projects[0];
+    }
+
+    if (!targetProject) {
+      // 複数プロジェクトがあり特定できない
+      const projectList = projects.map((p) => `・${p.name}`).join("\n");
+      if (replyToken) {
+        await replyLineMessage(
+          replyToken,
+          `プロジェクト名を含めて送信してください。\n\nアクティブなプロジェクト:\n${projectList}`
+        );
+      }
+      return;
+    }
+
+    // 提出を作成
+    const submission = await db.submission.create(supabase, {
+      userId,
+      projectId: targetProject.id,
+      content: messageText,
+    });
+
+    console.log(
+      `[LINE Submission] Created submission #${submission.sequenceNum} for project ${targetProject.name}`
+    );
+
+    // 確認メッセージを返信
+    if (replyToken) {
+      await replyLineMessage(
+        replyToken,
+        `【SUBMIT】提出を受領しました\n\n${targetProject.name} #${String(submission.sequenceNum).padStart(3, "0")}`
+      );
+    }
+  } catch (error) {
+    console.error("[LINE Submission] Error:", error);
+    if (replyToken) {
+      await replyLineMessage(
+        replyToken,
+        "提出の処理中にエラーが発生しました。しばらくしてから再度お試しください。"
+      );
+    }
   }
 }
 

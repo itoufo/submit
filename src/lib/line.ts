@@ -13,6 +13,53 @@ type LinePushRequest = {
   messages: LineMessage[];
 };
 
+type LineReplyRequest = {
+  replyToken: string;
+  messages: LineMessage[];
+};
+
+/**
+ * LINE Reply APIでメッセージを返信
+ */
+export async function replyLineMessage(
+  replyToken: string,
+  message: string
+): Promise<boolean> {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    console.warn("LINE_CHANNEL_ACCESS_TOKEN is not set");
+    return false;
+  }
+
+  const body: LineReplyRequest = {
+    replyToken,
+    messages: [{ type: "text", text: message }],
+  };
+
+  try {
+    const response = await fetch(`${LINE_API_BASE}/message/reply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("LINE Reply API error:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("LINE reply failed:", error);
+    return false;
+  }
+}
+
 /**
  * LINE Messaging APIでメッセージを送信
  */
