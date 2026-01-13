@@ -7,6 +7,19 @@ import {
   createJudgmentFailed,
 } from "@/lib/line";
 
+function getPeriodStart(lastJudgmentDate: string | null, projectCreatedAt: string): Date {
+  if (lastJudgmentDate) {
+    const start = new Date(lastJudgmentDate);
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  const start = new Date(projectCreatedAt);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
 /**
  * 期限超過判定 (0:30 JST)
  * 期限を過ぎたプロジェクトを判定し、ペナルティ処理
@@ -36,16 +49,30 @@ export async function GET(request: Request) {
 
     for (const project of projects) {
       try {
-        // 判定期間の提出をチェック
-        const judgmentDate = new Date(project.nextJudgmentDate!);
-        const periodStart = new Date(judgmentDate);
-        periodStart.setDate(periodStart.getDate() - 7); // 1週間前から（頻度によって調整が必要）
+        if (!project.nextJudgmentDate) {
+          console.warn(`[Judgment] Skip project without nextJudgmentDate: ${project.id}`);
+          continue;
+        }
 
+        const periodEnd = new Date(project.nextJudgmentDate);
+        periodEnd.setHours(23, 59, 59, 999);
+
+        const lastJudgment = await db.judgmentLog.findLatestByProject(
+          supabase,
+          project.id
+        );
+
+        const periodStart = getPeriodStart(
+          lastJudgment?.judgmentDate ?? null,
+          project.createdAt
+        );
+
+        // 判定期間の提出をチェック
         const submissions = await db.submission.findInPeriod(
           supabase,
           project.id,
           periodStart.toISOString(),
-          judgmentDate.toISOString()
+          periodEnd.toISOString()
         );
 
         const submitted = submissions.length > 0;
@@ -54,7 +81,7 @@ export async function GET(request: Request) {
         await db.judgmentLog.create(supabase, {
           userId: project.userId,
           projectId: project.id,
-          judgmentDate: judgmentDate.toISOString(),
+          judgmentDate: periodEnd.toISOString(),
           submitted,
           penaltyExecuted: !submitted,
           penaltyAmount: submitted ? null : project.penaltyAmount,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient, getSubmitSchema } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { db } from "@/lib/database";
 import crypto from "crypto";
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   try {
     // 既に他のユーザーに紐づいていないかチェック
     const { data: existing } = await supabase
-      .schema("submit")
+      .schema(getSubmitSchema())
       .from("User")
       .select("id")
       .eq("lineUserId", lineUserId)

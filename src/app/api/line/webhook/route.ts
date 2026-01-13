@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient, getSubmitSchema } from "@/lib/supabase/server";
 import { db } from "@/lib/database";
 import {
   verifyLineSignature,
@@ -81,7 +81,7 @@ async function handleLineEvent(
     case "unfollow":
       // ブロック時: lineUserIdをnullに
       const { data: users } = await supabase
-        .schema("submit")
+        .schema(getSubmitSchema())
         .from("User")
         .select("id")
         .eq("lineUserId", lineUserId);
@@ -121,7 +121,7 @@ async function handleSubmissionMessage(
   try {
     // LINE連携済みユーザーを検索
     const { data: users } = await supabase
-      .schema("submit")
+      .schema(getSubmitSchema())
       .from("User")
       .select("id")
       .eq("lineUserId", lineUserId);

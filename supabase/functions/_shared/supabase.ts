@@ -1,11 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export function createSupabaseClient() {
+  const schema = Deno.env.get("SUBMIT_SCHEMA") ?? "submit";
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     {
-      db: { schema: "submit" },
+      db: { schema },
     }
   );
 }

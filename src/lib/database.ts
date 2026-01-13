@@ -290,7 +290,8 @@ export const db = {
       const nextDate = calculateNextJudgmentDate(
         project.frequency,
         project.judgmentDay,
-        project.customDays
+        project.customDays,
+        project.nextJudgmentDate ? new Date(project.nextJudgmentDate) : undefined
       );
       return this.update(supabase, id, {
         nextJudgmentDate: nextDate.toISOString(),
@@ -403,6 +404,17 @@ export const db = {
       if (error) throw error;
       return data as JudgmentLog[];
     },
+    async findLatestByProject(supabase: AnySupabaseClient, projectId: string) {
+      const { data, error } = await supabase
+        .from("JudgmentLog")
+        .select("*")
+        .eq("projectId", projectId)
+        .order("judgmentDate", { ascending: false })
+        .limit(1)
+        .single();
+      if (error && error.code !== "PGRST116") throw error;
+      return data as JudgmentLog | null;
+    },
     async create(supabase: AnySupabaseClient, data: {
       userId: string;
       projectId: string;
@@ -504,24 +516,25 @@ export const db = {
 export function calculateNextJudgmentDate(
   frequency: string,
   judgmentDay: number,
-  customDays?: number | null
+  customDays?: number | null,
+  baseDate?: Date
 ): Date {
-  const now = new Date();
-  const result = new Date(now);
+  const reference = baseDate ? new Date(baseDate) : new Date();
+  const result = new Date(reference);
 
   switch (frequency) {
     case "daily":
       // 翌日
-      result.setDate(now.getDate() + 1);
+      result.setDate(reference.getDate() + 1);
       break;
     case "weekly":
       // Find next occurrence of judgmentDay (0=Sunday, 1=Monday, etc.)
-      const daysUntilNext = (judgmentDay - now.getDay() + 7) % 7 || 7;
-      result.setDate(now.getDate() + daysUntilNext);
+      const daysUntilNext = (judgmentDay - reference.getDay() + 7) % 7 || 7;
+      result.setDate(reference.getDate() + daysUntilNext);
       break;
     case "biweekly":
-      const daysUntilNextBi = (judgmentDay - now.getDay() + 7) % 7 || 7;
-      result.setDate(now.getDate() + daysUntilNextBi + 7);
+      const daysUntilNextBi = (judgmentDay - reference.getDay() + 7) % 7 || 7;
+      result.setDate(reference.getDate() + daysUntilNextBi + 7);
       break;
     case "monthly":
       result.setMonth(result.getMonth() + 1);
@@ -533,7 +546,7 @@ export function calculateNextJudgmentDate(
       break;
     case "custom":
       if (customDays) {
-        result.setDate(now.getDate() + customDays);
+        result.setDate(reference.getDate() + customDays);
       }
       break;
   }

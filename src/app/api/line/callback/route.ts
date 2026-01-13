@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient, getSubmitSchema } from "@/lib/supabase/server";
 import { db } from "@/lib/database";
 import {
   rateLimit,
@@ -152,7 +152,7 @@ export async function GET(request: Request) {
 
     // 既に他のユーザーに紐づいていないかチェック
     const { data: existing } = await supabase
-      .schema("submit")
+      .schema(getSubmitSchema())
       .from("User")
       .select("id")
       .eq("lineUserId", lineUserId)

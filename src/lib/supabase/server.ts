@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+export function getSubmitSchema() {
+  return process.env.SUBMIT_SCHEMA || "submit";
+}
+
 // Auth用クライアント（ユーザーセッションを使用）
 export async function createClient() {
   const cookieStore = await cookies();
@@ -40,7 +44,7 @@ export function createServiceClient() {
     serviceKey,
     {
       db: {
-        schema: "submit",
+        schema: getSubmitSchema(),
       },
     }
   );
