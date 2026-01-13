@@ -145,6 +145,7 @@ CREATE TABLE submit."Submission" (
     "projectId" text NOT NULL,
     "sequenceNum" integer NOT NULL,
     content text NOT NULL,
+    "lineMessageId" text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -293,6 +294,7 @@ CREATE INDEX "idx_penalty_status" ON submit."PenaltyLog" USING btree (status);
 CREATE INDEX "idx_submission_user" ON submit."Submission" USING btree ("userId");
 CREATE INDEX "idx_submission_project" ON submit."Submission" USING btree ("projectId");
 CREATE INDEX "idx_submission_created" ON submit."Submission" USING btree ("createdAt");
+CREATE UNIQUE INDEX "idx_submission_line_message" ON submit."Submission" USING btree ("lineMessageId");
 CREATE INDEX "idx_project_user" ON submit."Project" USING btree ("userId");
 CREATE INDEX "idx_project_status" ON submit."Project" USING btree (status);
 CREATE INDEX "idx_project_judgment" ON submit."Project" USING btree ("nextJudgmentDate");

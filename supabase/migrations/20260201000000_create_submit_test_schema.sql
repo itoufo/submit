@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS submit_test."Submission" (
     "projectId" text NOT NULL,
     "sequenceNum" integer NOT NULL,
     content text NOT NULL,
+    "lineMessageId" text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -293,6 +294,7 @@ CREATE INDEX IF NOT EXISTS "idx_penalty_status" ON submit_test."PenaltyLog" USIN
 CREATE INDEX IF NOT EXISTS "idx_submission_user" ON submit_test."Submission" USING btree ("userId");
 CREATE INDEX IF NOT EXISTS "idx_submission_project" ON submit_test."Submission" USING btree ("projectId");
 CREATE INDEX IF NOT EXISTS "idx_submission_created" ON submit_test."Submission" USING btree ("createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_submission_line_message" ON submit_test."Submission" USING btree ("lineMessageId");
 CREATE INDEX IF NOT EXISTS "idx_project_user" ON submit_test."Project" USING btree ("userId");
 CREATE INDEX IF NOT EXISTS "idx_project_status" ON submit_test."Project" USING btree (status);
 CREATE INDEX IF NOT EXISTS "idx_project_judgment" ON submit_test."Project" USING btree ("nextJudgmentDate");

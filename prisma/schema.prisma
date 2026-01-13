@@ -95,6 +95,7 @@ model Submission {
   projectId    String
   sequenceNum  Int               // 連番（#001, #002...）
   content      String   @db.Text // 提出内容（テキスト必須）
+  lineMessageId String?
   createdAt    DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

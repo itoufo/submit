@@ -246,6 +246,7 @@ export type LineWebhookEvent = {
   replyToken?: string;
   message?: {
     type: string;
+    id?: string;
     text?: string;
   };
 };

@@ -57,6 +57,7 @@ export type Submission = {
   projectId: string;
   sequenceNum: number;
   content: string;
+  lineMessageId: string | null;
   createdAt: string;
 };
 
@@ -331,7 +332,15 @@ export const db = {
       if (error) throw error;
       return data as Submission[];
     },
-    async create(supabase: AnySupabaseClient, data: { userId: string; projectId: string; content: string }) {
+    async create(
+      supabase: AnySupabaseClient,
+      data: {
+        userId: string;
+        projectId: string;
+        content: string;
+        lineMessageId?: string | null;
+      }
+    ) {
       // Get next sequence number
       const { data: lastSubmission } = await supabase
         .from("Submission")
@@ -353,6 +362,7 @@ export const db = {
           projectId: data.projectId,
           sequenceNum,
           content: data.content,
+          lineMessageId: data.lineMessageId || null,
           createdAt: now,
         })
         .select()
@@ -379,6 +389,15 @@ export const db = {
         .eq("projectId", projectId);
       if (error) throw error;
       return count || 0;
+    },
+    async findByLineMessageId(supabase: AnySupabaseClient, lineMessageId: string) {
+      const { data, error } = await supabase
+        .from("Submission")
+        .select("*")
+        .eq("lineMessageId", lineMessageId)
+        .single();
+      if (error && error.code !== "PGRST116") throw error;
+      return data as Submission | null;
     },
   },
 

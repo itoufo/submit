@@ -99,7 +99,8 @@ async function handleLineEvent(
           supabase,
           lineUserId,
           event.message.text,
-          event.replyToken
+          event.replyToken,
+          event.message.id
         );
       }
       break;
@@ -116,7 +117,8 @@ async function handleSubmissionMessage(
   supabase: ReturnType<typeof createServiceClient>,
   lineUserId: string,
   messageText: string,
-  replyToken?: string
+  replyToken?: string,
+  lineMessageId?: string
 ) {
   try {
     // LINE連携済みユーザーを検索
@@ -177,11 +179,25 @@ async function handleSubmissionMessage(
       return;
     }
 
+    if (lineMessageId) {
+      const existing = await db.submission.findByLineMessageId(
+        supabase,
+        lineMessageId
+      );
+      if (existing) {
+        console.log(
+          `[LINE Submission] Duplicate message skipped: ${lineMessageId}`
+        );
+        return;
+      }
+    }
+
     // 提出を作成
     const submission = await db.submission.create(supabase, {
       userId,
       projectId: targetProject.id,
       content: messageText,
+      lineMessageId,
     });
 
     console.log(
@@ -196,6 +212,16 @@ async function handleSubmissionMessage(
       );
     }
   } catch (error) {
+    const errorCode =
+      error && typeof error === "object" && "code" in error
+        ? (error as { code?: string }).code
+        : undefined;
+    if (lineMessageId && errorCode === "23505") {
+      console.log(
+        `[LINE Submission] Duplicate message rejected by DB: ${lineMessageId}`
+      );
+      return;
+    }
     console.error("[LINE Submission] Error:", error);
     if (replyToken) {
       await replyLineMessage(
