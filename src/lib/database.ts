@@ -141,6 +141,18 @@ export const db = {
     async setLineUserId(supabase: AnySupabaseClient, id: string, lineUserId: string) {
       return this.update(supabase, id, { lineUserId });
     },
+    /**
+     * 複数ユーザーを一括取得（N+1 回避）
+     */
+    async findByIds(supabase: AnySupabaseClient, ids: string[]) {
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from("User")
+        .select("*")
+        .in("id", ids);
+      if (error) throw error;
+      return data as User[];
+    },
   },
 
   // Pledge operations
@@ -399,6 +411,34 @@ export const db = {
       if (error && error.code !== "PGRST116") throw error;
       return data as Submission | null;
     },
+    /**
+     * 複数プロジェクトの提出を一括取得（N+1 回避）
+     * @returns Map<projectId, Submission[]>
+     */
+    async findInPeriodByProjectIds(
+      supabase: AnySupabaseClient,
+      projectIds: string[],
+      startDate: string,
+      endDate: string
+    ) {
+      if (projectIds.length === 0) return new Map<string, Submission[]>();
+
+      const { data, error } = await supabase
+        .from("Submission")
+        .select("*")
+        .in("projectId", projectIds)
+        .gte("createdAt", startDate)
+        .lt("createdAt", endDate);
+
+      if (error) throw error;
+
+      const result = new Map<string, Submission[]>();
+      for (const sub of (data || []) as Submission[]) {
+        const existing = result.get(sub.projectId) || [];
+        result.set(sub.projectId, [...existing, sub]);
+      }
+      return result;
+    },
   },
 
   // JudgmentLog operations
@@ -430,6 +470,16 @@ export const db = {
         .eq("projectId", projectId)
         .order("judgmentDate", { ascending: false })
         .limit(1)
+        .single();
+      if (error && error.code !== "PGRST116") throw error;
+      return data as JudgmentLog | null;
+    },
+    async findByProjectAndDate(supabase: AnySupabaseClient, projectId: string, judgmentDate: string) {
+      const { data, error } = await supabase
+        .from("JudgmentLog")
+        .select("*")
+        .eq("projectId", projectId)
+        .eq("judgmentDate", judgmentDate)
         .single();
       if (error && error.code !== "PGRST116") throw error;
       return data as JudgmentLog | null;
@@ -469,6 +519,31 @@ export const db = {
         .eq("submitted", false);
       if (error) throw error;
       return count || 0;
+    },
+    /**
+     * 複数プロジェクトの最新判定を一括取得（N+1 回避）
+     * @returns Map<projectId, JudgmentLog>
+     */
+    async findLatestByProjectIds(supabase: AnySupabaseClient, projectIds: string[]) {
+      if (projectIds.length === 0) return new Map<string, JudgmentLog>();
+
+      // 各プロジェクトの最新判定を取得（window function使用）
+      const { data, error } = await supabase
+        .from("JudgmentLog")
+        .select("*")
+        .in("projectId", projectIds)
+        .order("judgmentDate", { ascending: false });
+
+      if (error) throw error;
+
+      // プロジェクトごとに最新のものだけを抽出
+      const result = new Map<string, JudgmentLog>();
+      for (const log of (data || []) as JudgmentLog[]) {
+        if (!result.has(log.projectId)) {
+          result.set(log.projectId, log);
+        }
+      }
+      return result;
     },
   },
 
@@ -532,46 +607,15 @@ export const db = {
 };
 
 // Helper function to calculate next judgment date
+// JST ベースで計算し、UTC で返す
+import { calculateNextJudgmentDateJST } from "./date-utils";
+
 export function calculateNextJudgmentDate(
   frequency: string,
   judgmentDay: number,
   customDays?: number | null,
   baseDate?: Date
 ): Date {
-  const reference = baseDate ? new Date(baseDate) : new Date();
-  const result = new Date(reference);
-
-  switch (frequency) {
-    case "daily":
-      // 翌日
-      result.setDate(reference.getDate() + 1);
-      break;
-    case "weekly":
-      // Find next occurrence of judgmentDay (0=Sunday, 1=Monday, etc.)
-      const daysUntilNext = (judgmentDay - reference.getDay() + 7) % 7 || 7;
-      result.setDate(reference.getDate() + daysUntilNext);
-      break;
-    case "biweekly":
-      const daysUntilNextBi = (judgmentDay - reference.getDay() + 7) % 7 || 7;
-      result.setDate(reference.getDate() + daysUntilNextBi + 7);
-      break;
-    case "monthly":
-      result.setMonth(result.getMonth() + 1);
-      result.setDate(1);
-      // Find first occurrence of judgmentDay in next month
-      while (result.getDay() !== judgmentDay) {
-        result.setDate(result.getDate() + 1);
-      }
-      break;
-    case "custom":
-      if (customDays) {
-        result.setDate(reference.getDate() + customDays);
-      }
-      break;
-  }
-
-  // Set time to end of day (23:59:59)
-  result.setHours(23, 59, 59, 999);
-
-  return result;
+  const isoString = calculateNextJudgmentDateJST(frequency, judgmentDay, customDays, baseDate);
+  return new Date(isoString);
 }

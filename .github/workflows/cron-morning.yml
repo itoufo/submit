@@ -1,0 +1,17 @@
+name: Morning Reminder Cron
+
+on:
+  schedule:
+    # 毎日 0:00 UTC (9:00 JST) に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  morning-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Morning Reminder API
+        run: |
+          curl -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://submit-pro.vercel.app/api/cron/morning

@@ -1,49 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 224 71.4% 4.1%;
+  --background: 32 38% 96%;
+  --foreground: 216 28% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 224 71.4% 4.1%;
+  --card-foreground: 216 28% 12%;
   --popover: 0 0% 100%;
-  --popover-foreground: 224 71.4% 4.1%;
-  --primary: 220.9 39.3% 11%;
-  --primary-foreground: 210 20% 98%;
-  --secondary: 220 14.3% 95.9%;
-  --secondary-foreground: 220.9 39.3% 11%;
-  --muted: 220 14.3% 95.9%;
-  --muted-foreground: 220 8.9% 46.1%;
-  --accent: 220 14.3% 95.9%;
-  --accent-foreground: 220.9 39.3% 11%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 20% 98%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 224 71.4% 4.1%;
-  --radius: 0.5rem;
+  --popover-foreground: 216 28% 12%;
+  --primary: 12 76% 46%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 210 22% 94%;
+  --secondary-foreground: 216 28% 12%;
+  --muted: 24 18% 92%;
+  --muted-foreground: 215 12% 42%;
+  --accent: 189 70% 88%;
+  --accent-foreground: 216 28% 12%;
+  --destructive: 0 74% 46%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 24 14% 86%;
+  --input: 24 14% 86%;
+  --ring: 12 76% 46%;
+  --radius: 0.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71.4% 4.1%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 210 20% 98%;
-    --primary-foreground: 220.9 39.3% 11%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 215 27.9% 16.9%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 216 12.2% 83.9%;
+    --background: 215 30% 9%;
+    --foreground: 30 20% 96%;
+    --card: 215 28% 12%;
+    --card-foreground: 30 20% 96%;
+    --popover: 215 28% 12%;
+    --popover-foreground: 30 20% 96%;
+    --primary: 12 70% 52%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 215 22% 18%;
+    --secondary-foreground: 30 20% 96%;
+    --muted: 215 22% 18%;
+    --muted-foreground: 215 14% 70%;
+    --accent: 189 40% 24%;
+    --accent-foreground: 30 20% 96%;
+    --destructive: 0 70% 42%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 215 18% 20%;
+    --input: 215 18% 20%;
+    --ring: 12 70% 52%;
   }
 }
 
@@ -76,7 +76,11 @@
 }
 
 body {
-  background: hsl(var(--background));
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  background:
+    radial-gradient(circle at top left, hsla(16, 82%, 78%, 0.35), transparent 50%),
+    radial-gradient(circle at 20% 20%, hsla(189, 70%, 70%, 0.35), transparent 55%),
+    linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)));
   color: hsl(var(--foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
 }

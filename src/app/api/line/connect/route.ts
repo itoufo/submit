@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient, getSubmitSchema } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { db } from "@/lib/database";
 import crypto from "crypto";
@@ -17,7 +17,7 @@ import {
 export async function GET(request: Request) {
   // Rate limiting
   const ip = getClientIP(request);
-  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
+  const rateLimitResult = await rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -65,69 +65,9 @@ export async function GET(request: Request) {
   return response;
 }
 
-/**
- * LINE連携完了（LINEログインコールバック後）
- */
-export async function POST(request: Request) {
-  // Rate limiting
-  const ip = getClientIP(request);
-  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
-
-  if (!rateLimitResult.success) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: rateLimitHeaders(rateLimitResult),
-      }
-    );
-  }
-
-  const user = await getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { lineUserId } = await request.json();
-
-  if (!lineUserId) {
-    return NextResponse.json(
-      { error: "lineUserId is required" },
-      { status: 400 }
-    );
-  }
-
-  const supabase = createServiceClient();
-
-  try {
-    // 既に他のユーザーに紐づいていないかチェック
-    const { data: existing } = await supabase
-      .schema(getSubmitSchema())
-      .from("User")
-      .select("id")
-      .eq("lineUserId", lineUserId)
-      .neq("id", user.id)
-      .single();
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "This LINE account is already connected to another user" },
-        { status: 409 }
-      );
-    }
-
-    // LINE連携を保存
-    await db.user.setLineUserId(supabase, user.id, lineUserId);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("LINE connect error:", error);
-    return NextResponse.json(
-      { error: "Failed to connect LINE account" },
-      { status: 500 }
-    );
-  }
-}
+// POST endpoint removed for security reasons.
+// LINE linking must go through OAuth callback (/api/line/callback) only.
+// This prevents attackers from linking arbitrary LINE accounts.
 
 /**
  * LINE連携解除
@@ -135,7 +75,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   // Rate limiting
   const ip = getClientIP(request);
-  const rateLimitResult = rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
+  const rateLimitResult = await rateLimit(`line-connect:${ip}`, RATE_LIMITS.auth);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(

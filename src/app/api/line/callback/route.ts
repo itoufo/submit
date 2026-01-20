@@ -18,7 +18,7 @@ const LINE_PROFILE_URL = "https://api.line.me/v2/profile";
  */
 export async function GET(request: Request) {
   const ip = getClientIP(request);
-  const rateLimitResult = rateLimit(`line-callback:${ip}`, RATE_LIMITS.lineCallback);
+  const rateLimitResult = await rateLimit(`line-callback:${ip}`, RATE_LIMITS.lineCallback);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(

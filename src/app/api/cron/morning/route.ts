@@ -35,13 +35,18 @@ export async function GET(request: Request) {
       userProjects.set(project.userId, [...existing, project]);
     }
 
+    // ユーザー情報を一括取得（N+1 回避）
+    const userIds = Array.from(userProjects.keys());
+    const users = await db.user.findByIds(supabase, userIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     let sentCount = 0;
     let errorCount = 0;
 
     // ユーザーごとに通知
     for (const [userId, userProjectList] of userProjects) {
-      // ユーザー情報取得
-      const user = await db.user.findUnique(supabase, userId);
+      // ユーザー情報取得（バッチ取得済み）
+      const user = userMap.get(userId);
 
       if (!user) {
         console.warn(`[Morning Reminder] User not found: ${userId}`);

@@ -21,7 +21,7 @@ import {
 export async function POST(request: Request) {
   // Rate limiting
   const ip = getClientIP(request);
-  const rateLimitResult = rateLimit(`line-webhook:${ip}`, RATE_LIMITS.lineWebhook);
+  const rateLimitResult = await rateLimit(`line-webhook:${ip}`, RATE_LIMITS.lineWebhook);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
