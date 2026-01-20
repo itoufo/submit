@@ -96,3 +96,13 @@ CREATE POLICY "Service role only" ON submit."RateLimits"
 --   '*/5 * * * *',
 --   $$DELETE FROM submit."RateLimits" WHERE "resetTime" < NOW()$$
 -- );
+
+-- ============================================
+-- ROLLBACK: 以下を実行してロールバック
+-- ============================================
+-- DROP POLICY IF EXISTS "Service role only" ON submit."RateLimits";
+-- DROP TRIGGER IF EXISTS rate_limits_updated_at ON submit."RateLimits";
+-- DROP FUNCTION IF EXISTS submit.update_rate_limits_updated_at();
+-- DROP FUNCTION IF EXISTS submit.check_rate_limit(TEXT, INTEGER, INTEGER);
+-- DROP INDEX IF EXISTS submit."RateLimits_resetTime_idx";
+-- DROP TABLE IF EXISTS submit."RateLimits";

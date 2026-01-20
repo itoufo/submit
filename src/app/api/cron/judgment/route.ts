@@ -6,18 +6,24 @@ import {
   createJudgmentSuccess,
   createJudgmentFailed,
 } from "@/lib/line";
+import { toJST, toUTC } from "@/lib/date-utils";
 
-function getPeriodStart(lastJudgmentDate: string | null, projectCreatedAt: string): Date {
+/**
+ * 判定期間の開始日を JST で計算
+ */
+function getPeriodStartJST(lastJudgmentDate: string | null, projectCreatedAt: string): Date {
   if (lastJudgmentDate) {
-    const start = new Date(lastJudgmentDate);
-    start.setDate(start.getDate() + 1);
-    start.setHours(0, 0, 0, 0);
-    return start;
+    // 前回判定日の翌日 0:00 JST
+    const lastJST = toJST(new Date(lastJudgmentDate));
+    lastJST.setDate(lastJST.getDate() + 1);
+    lastJST.setHours(0, 0, 0, 0);
+    return toUTC(lastJST);
   }
 
-  const start = new Date(projectCreatedAt);
-  start.setHours(0, 0, 0, 0);
-  return start;
+  // プロジェクト作成日の 0:00 JST
+  const createdJST = toJST(new Date(projectCreatedAt));
+  createdJST.setHours(0, 0, 0, 0);
+  return toUTC(createdJST);
 }
 
 /**
@@ -67,13 +73,13 @@ export async function GET(request: Request) {
           continue;
         }
 
+        // nextJudgmentDate は既に JST 23:59:59 → UTC 変換済み
         const periodEnd = new Date(project.nextJudgmentDate);
-        periodEnd.setHours(23, 59, 59, 999);
 
         // バッチ取得済みの判定ログを使用
         const lastJudgment = latestJudgmentsMap.get(project.id) ?? null;
 
-        const periodStart = getPeriodStart(
+        const periodStart = getPeriodStartJST(
           lastJudgment?.judgmentDate ?? null,
           project.createdAt
         );
