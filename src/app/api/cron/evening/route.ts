@@ -28,6 +28,20 @@ export async function GET(request: Request) {
 
     console.log(`[Evening Reminder] Found ${projects.length} projects due today`);
 
+    // 本日の提出を一括取得（N+1 回避）
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const projectIds = projects.map((p) => p.id);
+    const submissionsMap = await db.submission.findInPeriodByProjectIds(
+      supabase,
+      projectIds,
+      todayStart.toISOString(),
+      todayEnd.toISOString()
+    );
+
     // ユーザーごとにグループ化 & 未提出チェック
     const userUnsubmittedProjects = new Map<
       string,
@@ -35,18 +49,7 @@ export async function GET(request: Request) {
     >();
 
     for (const project of projects) {
-      // 本日の提出があるかチェック
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
-      const submissions = await db.submission.findInPeriod(
-        supabase,
-        project.id,
-        todayStart.toISOString(),
-        todayEnd.toISOString()
-      );
+      const submissions = submissionsMap.get(project.id) || [];
 
       // 未提出の場合のみ追加
       if (submissions.length === 0) {
@@ -58,13 +61,18 @@ export async function GET(request: Request) {
       }
     }
 
+    // ユーザー情報を一括取得（N+1 回避）
+    const userIds = Array.from(userUnsubmittedProjects.keys());
+    const users = await db.user.findByIds(supabase, userIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     let sentCount = 0;
     let errorCount = 0;
 
     // ユーザーごとに通知
     for (const [userId, projectList] of userUnsubmittedProjects) {
-      // ユーザー情報取得
-      const user = await db.user.findUnique(supabase, userId);
+      // ユーザー情報取得（バッチ取得済み）
+      const user = userMap.get(userId);
 
       if (!user) {
         console.warn(`[Evening Reminder] User not found: ${userId}`);

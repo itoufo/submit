@@ -1,31 +1,10 @@
 /**
- * シンプルなインメモリ Rate Limiter
- * 本番環境ではUpstash Redis等を推奨
+ * Supabase ベースの永続 Rate Limiter
+ *
+ * サーバーレス環境でも一貫したレート制限を提供
  */
 
-type RateLimitEntry = {
-  count: number;
-  resetTime: number;
-};
-
-// インメモリストア（サーバーレス環境では再起動でリセット）
-const store = new Map<string, RateLimitEntry>();
-
-// 定期的にクリーンアップ（メモリリーク防止）
-const CLEANUP_INTERVAL = 60 * 1000; // 1分
-let lastCleanup = Date.now();
-
-function cleanup() {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-
-  lastCleanup = now;
-  for (const [key, entry] of store.entries()) {
-    if (entry.resetTime < now) {
-      store.delete(key);
-    }
-  }
-}
+import { createServiceClient } from "./supabase/server";
 
 export type RateLimitConfig = {
   /** ウィンドウ内の最大リクエスト数 */
@@ -42,42 +21,61 @@ export type RateLimitResult = {
 };
 
 /**
- * Rate limit をチェック
+ * Rate limit をチェック（Supabase RPC使用）
  * @param identifier - ユーザー識別子（IP, userId等）
  * @param config - Rate limit 設定
  */
-export function rateLimit(
+export async function rateLimit(
   identifier: string,
   config: RateLimitConfig
-): RateLimitResult {
-  cleanup();
+): Promise<RateLimitResult> {
+  try {
+    const supabase = createServiceClient();
 
-  const now = Date.now();
-  const windowMs = config.windowSec * 1000;
-  const key = identifier;
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_identifier: identifier,
+      p_limit: config.limit,
+      p_window_sec: config.windowSec,
+    });
 
-  let entry = store.get(key);
+    if (error) {
+      console.error("[RateLimit] Supabase error:", error);
+      // エラー時はフォールバックで許可（サービス継続優先）
+      return {
+        success: true,
+        limit: config.limit,
+        remaining: config.limit,
+        resetTime: Date.now() + config.windowSec * 1000,
+      };
+    }
 
-  // 新しいエントリまたはウィンドウがリセットされた場合
-  if (!entry || entry.resetTime < now) {
-    entry = {
-      count: 0,
-      resetTime: now + windowMs,
+    const result = data?.[0];
+    if (!result) {
+      // データがない場合も許可
+      return {
+        success: true,
+        limit: config.limit,
+        remaining: config.limit,
+        resetTime: Date.now() + config.windowSec * 1000,
+      };
+    }
+
+    return {
+      success: result.success,
+      limit: config.limit,
+      remaining: result.remaining,
+      resetTime: new Date(result.reset_time).getTime(),
+    };
+  } catch (err) {
+    console.error("[RateLimit] Unexpected error:", err);
+    // 例外時も許可（サービス継続優先）
+    return {
+      success: true,
+      limit: config.limit,
+      remaining: config.limit,
+      resetTime: Date.now() + config.windowSec * 1000,
     };
   }
-
-  entry.count++;
-  store.set(key, entry);
-
-  const remaining = Math.max(0, config.limit - entry.count);
-  const success = entry.count <= config.limit;
-
-  return {
-    success,
-    limit: config.limit,
-    remaining,
-    resetTime: entry.resetTime,
-  };
 }
 
 /**

@@ -43,8 +43,21 @@ export async function GET(request: Request) {
 
     console.log(`[Judgment] Found ${projects.length} projects to judge`);
 
+    // バッチ取得: 最新判定ログ（N+1 回避）
+    const projectIds = projects.map((p) => p.id);
+    const latestJudgmentsMap = await db.judgmentLog.findLatestByProjectIds(
+      supabase,
+      projectIds
+    );
+
+    // バッチ取得: ユーザー情報（N+1 回避）
+    const userIds = [...new Set(projects.map((p) => p.userId))];
+    const users = await db.user.findByIds(supabase, userIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     let submittedCount = 0;
     let missedCount = 0;
+    let skippedCount = 0;
     let errorCount = 0;
 
     for (const project of projects) {
@@ -57,10 +70,8 @@ export async function GET(request: Request) {
         const periodEnd = new Date(project.nextJudgmentDate);
         periodEnd.setHours(23, 59, 59, 999);
 
-        const lastJudgment = await db.judgmentLog.findLatestByProject(
-          supabase,
-          project.id
-        );
+        // バッチ取得済みの判定ログを使用
+        const lastJudgment = latestJudgmentsMap.get(project.id) ?? null;
 
         const periodStart = getPeriodStart(
           lastJudgment?.judgmentDate ?? null,
@@ -76,22 +87,37 @@ export async function GET(request: Request) {
         );
 
         const submitted = submissions.length > 0;
+        const judgmentDateStr = periodEnd.toISOString();
+
+        // 冪等性チェック: 既に判定済みならスキップ
+        const existingJudgment = await db.judgmentLog.findByProjectAndDate(
+          supabase,
+          project.id,
+          judgmentDateStr
+        );
+        if (existingJudgment) {
+          console.log(`[Judgment] Project ${project.id}: Already judged, skipping`);
+          skippedCount++;
+          continue;
+        }
 
         // 判定ログを作成
         await db.judgmentLog.create(supabase, {
           userId: project.userId,
           projectId: project.id,
-          judgmentDate: periodEnd.toISOString(),
+          judgmentDate: judgmentDateStr,
           submitted,
           penaltyExecuted: !submitted,
           penaltyAmount: submitted ? null : project.penaltyAmount,
         });
 
+        // バッチ取得済みのユーザー情報を使用
+        const user = userMap.get(project.userId);
+
         if (submitted) {
           submittedCount++;
 
           // 提出済み通知
-          const user = await db.user.findUnique(supabase, project.userId);
           if (user?.lineUserId) {
             const message = createJudgmentSuccess(project.name);
             await sendLineMessage(user.lineUserId, message);
@@ -114,7 +140,6 @@ export async function GET(request: Request) {
           });
 
           // 未提出通知
-          const user = await db.user.findUnique(supabase, project.userId);
           if (user?.lineUserId && user.notifyUrgent) {
             const message = createJudgmentFailed(
               project.name,
@@ -144,6 +169,7 @@ export async function GET(request: Request) {
       projectsJudged: projects.length,
       submitted: submittedCount,
       missed: missedCount,
+      skipped: skippedCount,
       errors: errorCount,
       timestamp: new Date().toISOString(),
     });

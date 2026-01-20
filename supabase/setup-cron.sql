@@ -2,19 +2,16 @@
 -- SUBMIT pg_cron スケジュール設定
 -- ============================================
 --
--- Supabase Dashboard > SQL Editor で実行してください
+-- ⚠️ DEPRECATED: このファイルは参照用です
 --
--- 事前準備:
--- 1. pg_cron と pg_net 拡張を有効化
---    Dashboard > Database > Extensions で検索して有効化
+-- スケジューラは GitHub Actions に統一されました。
+-- 実際のcronジョブは .github/workflows/ を参照してください:
+--   - cron-morning.yml  (9:00 JST)
+--   - cron-evening.yml  (21:00 JST)
+--   - cron-judgment.yml (0:30 JST)
 --
--- 2. Edge Functions をデプロイ
---    supabase functions deploy judge
---    supabase functions deploy remind-morning
---    supabase functions deploy remind-evening
---    supabase functions deploy remind-urgent
---
--- 3. 以下のSQLを実行
+-- pg_cron を使用していた場合は以下の unschedule を実行して
+-- 二重実行を防止してください。
 -- ============================================
 
 -- 既存のジョブを削除（再設定時用）

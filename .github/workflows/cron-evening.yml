@@ -1,0 +1,17 @@
+name: Evening Reminder Cron
+
+on:
+  schedule:
+    # 毎日 12:00 UTC (21:00 JST) に実行
+    - cron: '0 12 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  evening-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Evening Reminder API
+        run: |
+          curl -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://submit-pro.vercel.app/api/cron/evening
